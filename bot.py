@@ -408,7 +408,7 @@ async def monitor_validators():
             embed.add_field(name="🌐 Chain", value=chain_name.upper(), inline=True)
             embed.add_field(name="🆔 Moniker", value=current_moniker if current_moniker else "N/A", inline=True)
             embed.add_field(name="📜 Address", value=f"`{validator_address}`", inline=False)
-            embed.add_field(name="🚨 Jailed?", value="🚨 Yes" if current_jailed else "✅ No", inline=True)
+            embed.add_field(name="🚨 Jailed?", value="🚨 Yes" if current_jailed else "No", inline=True)
             embed.add_field(name="📊 Status", value=current_status, inline=True)
             embed.add_field(name="📉 Missed Blocks", value=f"{current_missed_blocks}" if current_missed_blocks != -1 else "N/A", inline=True)
             embed.add_field(name="🔋 Total Stake", value=status_info.get('total_stake', "N/A"), inline=True)
@@ -593,7 +593,7 @@ async def myvalidators_slash(interaction: discord.Interaction):
                 color=discord.Color.blue(),
                 timestamp=datetime.datetime.now(datetime.timezone.utc)
             )
-            embed.add_field(name="🚨 Jailed?", value="🚨 Yes" if jailed else "✅ No", inline=True)
+            embed.add_field(name="🚨 Jailed?", value="🚨 Yes" if jailed else "No", inline=True)
             embed.add_field(name="📊 Status", value=status, inline=True)
             embed.add_field(name="📉 Missed Blocks", value=f"{missed_blocks}" if missed_blocks != -1 else "N/A", inline=True)
             embed.add_field(name="🔋 Total Stake", value=total_stake, inline=True)
@@ -685,7 +685,7 @@ async def vals_slash(interaction: discord.Interaction, chain_name: str):
                 color=discord.Color.blue(),
                 timestamp=datetime.datetime.now(datetime.timezone.utc)
             )
-            embed.add_field(name="🚨 Jailed?", value="🚨 Yes" if jailed else "✅ No", inline=True)
+            embed.add_field(name="🚨 Jailed?", value="🚨 Yes" if jailed else "No", inline=True)
             embed.add_field(name="📊 Status", value=status, inline=True)
             embed.add_field(name="📉 Missed Blocks", value=f"{missed_blocks}" if missed_blocks != -1 else "N/A", inline=True)
             embed.add_field(name="🔋 Total Stake", value=total_stake, inline=True)
@@ -786,7 +786,7 @@ async def validator_status_slash(interaction: discord.Interaction, chain_name: s
             color=discord.Color.blue(),
             timestamp=datetime.datetime.now(datetime.timezone.utc)
         )
-        embed.add_field(name="🚨 Jailed?", value="🚨 Yes" if jailed else "✅ No", inline=True)
+        embed.add_field(name="🚨 Jailed?", value="🚨 Yes" if jailed else "No", inline=True)
         embed.add_field(name="📊 Status", value=status, inline=True)
         embed.add_field(name="📉 Missed Blocks", value=f"{missed_blocks}" if missed_blocks != -1 else "N/A", inline=True)
         embed.add_field(name="🔋 Total Stake", value=total_stake, inline=True)
