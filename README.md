@@ -30,8 +30,8 @@ Follow these steps to get the bot up and running on your system.
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/astrostake/cosmos-validator-monitor.git
-cd cosmos-validator-monitor
+git clone https://github.com/astrostake/discord-cosmos-validator-monitor.git
+cd discord-cosmos-validator-monitor
 ```
 
 ### 2. Create a Discord Bot and Obtain Your Token
