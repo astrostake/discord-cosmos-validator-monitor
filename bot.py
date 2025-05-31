@@ -32,7 +32,7 @@ SUPPORTED_CHAINS = {
         "slashing_params_endpoint": "/cosmos/slashing/v1beta1/params"
     },
     "lumera": {
-        "rest_api_url": "https://lumera-testnet-api.polkachu.com",
+        "rest_api_url": "https://lcd.testnet.lumera.io",
         "valcons_prefix": "lumeravalcons",
         "token_symbol": "LUM",
         "missed_blocks_supported": True,
