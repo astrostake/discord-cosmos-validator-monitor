@@ -458,20 +458,20 @@ async def help_slash(interaction: discord.Interaction):
         name="How to Use Commands",
         value=(
             "Type `/` in the chat to see available commands and their arguments.\n"
-            "**`/help`**: Get this information about the bot.\n"
-            "**`/list_chains`**: See which chains are supported.\n"
-            "**`/register <chain_name> <validator_address>`**: Add your validator for monitoring.\n"
-            "**`/validator_status <chain_name> <validator_address>`**: Get instant status for a specific validator.\n"
-            "**`/vals <chain_name>`**: Display validators you registered on a specific chain.\n"
-            "**`/set_notifications <chain_name> <validator_address> <on/off>`**: Manage alerts for your registered validator.\n"
-            "**`/unregister <chain_name> <validator_address>`**: Remove a validator from your monitoring list.\n"
-            "**`/myvalidators`**: See all validators you've registered.\n"
-            "**`/notification_channel <chain_name> <validator_address>`**: Shows where notifications are sent for a specific validator.\n"
-            "**`/test_notification`**: See an example of a bot notification."
+            "- **`/help`**: Get this information about the bot.\n"
+            "- **`/list_chains`**: See which chains are supported.\n"
+            "- **`/register <chain_name> <validator_address>`**: Add your validator for monitoring.\n"
+            "- **`/validator_status <chain_name> <validator_address>`**: Get instant status for a specific validator.\n"
+            "- **`/vals <chain_name>`**: Display validators you registered on a specific chain.\n"
+            "- **`/set_notifications <chain_name> <validator_address> <on/off>`**: Manage alerts for your registered validator.\n"
+            "- **`/unregister <chain_name> <validator_address>`**: Remove a validator from your monitoring list.\n"
+            "- **`/myvalidators`**: See all validators you've registered.\n"
+            "- **`/notification_channel <chain_name> <validator_address>`**: Shows where notifications are sent for a specific validator.\n"
+            "- **`/test_notification`**: See an example of a bot notification."
         ),
         inline=False
     )
-    embed.set_footer(text=f"Bot developed by {bot.user.name}")
+    embed.set_footer(text=f"Bot developed by AstroStake.xyz")
     await interaction.response.send_message(embed=embed, ephemeral=False)
 
 @bot.tree.command(name="list_chains", description="Displays a list of supported chains.")
@@ -494,7 +494,7 @@ async def register_slash(interaction: discord.Interaction, chain_name: str, vali
     Registers a validator for monitoring by the bot.
     The bot will send notifications for this validator to the channel where it was registered.
     """
-    await interaction.response.defer(ephemeral=True)
+    await interaction.response.defer(ephemeral=False)
 
     chain_name = chain_name.lower()
     if chain_name not in SUPPORTED_CHAINS:
@@ -507,8 +507,6 @@ async def register_slash(interaction: discord.Interaction, chain_name: str, vali
     if not validator_address.startswith(valoper_prefix):
         await interaction.followup.send(f"Invalid validator address format for `{chain_name.upper()}` chain. Please use `{valoper_prefix}...`.", ephemeral=True)
         return
-
-    await interaction.followup.send(f"Verifying validator `{validator_address}` on `{chain_name.upper()}` chain...", ephemeral=True)
 
     status_info = await get_validator_info(chain_name, validator_address)
     if not status_info['success']:
