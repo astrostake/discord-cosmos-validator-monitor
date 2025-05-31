@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python/
+venv/
+env/
+.venv/ # Tambahkan ini jika Anda menggunakan .venv sebagai nama standar virtual environment
+
+# Database
+*.db
+
+# Environment variables
+.env
