@@ -10,6 +10,8 @@ This Discord bot provides real-time monitoring and alerts for your Cosmos SDK-ba
     * Changes in staking status (e.g., `BONDED`, `UNBONDING`, `UNBONDED`).
     * Significant increases in **Missed Blocks** (if supported by the chain's API).
     * API errors when fetching validator data, indicating potential issues with the chain's RPC endpoint.
+    * Governance Proposals: New, voting period, final results.
+    * Chain Upgrades: New plan announcements, and status.
 * **Detailed Status Information**: Retrieve comprehensive current validator status, including moniker, jailed status, total stake, and estimated uptime.
 * **Personalized Monitoring**: Register your own validators and receive dedicated mentions for important alerts, ensuring you don't miss critical updates.
 * **Easy Management**: Simple Discord slash commands allow you to register, unregister, and check the status of your monitored validators effortlessly.
@@ -114,6 +116,7 @@ All bot commands are implemented as Discord slash commands, accessible by typing
 - `/validator_status <chain_name> <validator_address>`: Fetches and displays the immediate status of any given validator, whether it's registered by you or not.
 - `/set_notifications <chain_name> <validator_address> <on/off>`: Toggles (enables/disables) notification alerts for a specific validator you have registered.
 - `/notification_channel <chain_name> <validator_address>`: Shows which Discord channel is configured to receive notifications for a particular registered validator.
+- `/set_chain_notifications <chain> <gov_on/off> <up_on/off> <mention_here>`: Configure governance & upgrade alerts for THIS channel.
 - `/test_notification`: Sends a sample notification embed to the current channel, demonstrating the bot's alert message format.
 
 ## 📂 Project Structure
