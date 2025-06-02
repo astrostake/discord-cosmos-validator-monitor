@@ -1,49 +1,43 @@
 import sqlite3
 import datetime
-from typing import List, Tuple, Optional
 
 DATABASE_NAME = 'validator_monitor.db'
 
 def init_db():
-    """
-    Initializes the SQLite database and creates the 'validators' table if it doesn't already exist.
-    The table stores information about monitored validators, including user and channel IDs
-    for notifications, validator details, and monitoring status.
-    """
+    """Initializes the database and creates tables if they don't exist."""
     conn = sqlite3.connect(DATABASE_NAME)
     cursor = conn.cursor()
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS validators (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,            -- Discord user ID who registered this validator
-            channel_id INTEGER NOT NULL,         -- Discord channel ID where notifications should be sent
-            chain_name TEXT NOT NULL,            -- Name of the blockchain (e.g., 'empe', 'lumera')
-            validator_address TEXT NOT NULL,     -- The validator's 'valoper' address
-            moniker TEXT,                        -- Last known moniker of the validator
-            status TEXT,                         -- Last known operational status (e.g., BONDED, JAILED, UNBONDED, API_ERROR)
-            missed_blocks INTEGER,               -- Last known missed blocks count (-1 if not applicable/inaccessible)
-            last_check_time TEXT,                -- ISO formatted string of the last time the validator was checked
-            notifications_enabled BOOLEAN DEFAULT 1, -- Flag to enable/disable notifications (1 for True, 0 for False)
-            UNIQUE(user_id, chain_name, validator_address) -- Ensure a user can't register the same validator multiple times
+            user_id INTEGER NOT NULL,            -- Discord user ID who registered
+            channel_id INTEGER NOT NULL,         -- Channel ID for notifications
+            chain_name TEXT NOT NULL,            -- Chain name (e.g., 'empe', 'lumera')
+            validator_address TEXT NOT NULL UNIQUE, -- Validator address (e.g., empevaloper...)
+            moniker TEXT,                        -- Last known moniker (can be updated)
+            status TEXT,                         -- Last known status (e.g., BONDED, JAILED, UNBONDED)
+            missed_blocks INTEGER,               -- Last known missed blocks count (-1 if inaccessible)
+            last_check_time TEXT,                -- Last check time (ISO format string)
+            notifications_enabled BOOLEAN DEFAULT 1 -- Whether notifications are active (1=True, 0=False)
+        );
+    ''')
+    # --- NEW TABLE FOR GOVERNANCE AND UPGRADE NOTIFICATIONS ---
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS chain_notification_settings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            channel_id INTEGER NOT NULL,
+            chain_name TEXT NOT NULL,
+            notify_gov_enabled BOOLEAN DEFAULT 0,
+            notify_upgrade_enabled BOOLEAN DEFAULT 0,
+            mention_type TEXT, -- 'here', 'everyone', or NULL
+            UNIQUE(channel_id, chain_name)
         );
     ''')
     conn.commit()
     conn.close()
 
-def add_validator(user_id: int, channel_id: int, chain_name: str, validator_address: str, moniker: Optional[str] = None) -> bool:
-    """
-    Adds a new validator to the monitoring database.
-
-    Args:
-        user_id (int): The Discord user ID who is registering the validator.
-        channel_id (int): The Discord channel ID where notifications should be sent.
-        chain_name (str): The name of the blockchain.
-        validator_address (str): The validator's operator address.
-        moniker (Optional[str]): The validator's known moniker. Defaults to None.
-
-    Returns:
-        bool: True if the validator was successfully added, False if it already exists.
-    """
+def add_validator(user_id, channel_id, chain_name, validator_address, moniker=None):
+    """Adds a new validator to the database."""
     conn = sqlite3.connect(DATABASE_NAME)
     cursor = conn.cursor()
     try:
@@ -58,65 +52,31 @@ def add_validator(user_id: int, channel_id: int, chain_name: str, validator_addr
         conn.commit()
         return True
     except sqlite3.IntegrityError:
-        # This error occurs if a unique constraint is violated (e.g., same validator registered twice by the same user)
         return False
     finally:
         conn.close()
 
-def remove_validator(user_id: int, chain_name: str, validator_address: str) -> bool:
-    """
-    Removes a validator from the monitoring database for a specific user.
-
-    Args:
-        user_id (int): The Discord user ID who registered the validator.
-        chain_name (str): The name of the blockchain.
-        validator_address (str): The validator's operator address.
-
-    Returns:
-        bool: True if the validator was successfully removed, False if not found.
-    """
+def remove_validator(user_id, chain_name, validator_address):
+    """Removes a validator from the database."""
     conn = sqlite3.connect(DATABASE_NAME)
     cursor = conn.cursor()
-    cursor.execute(
-        "DELETE FROM validators WHERE user_id = ? AND chain_name = ? AND validator_address = ?",
-        (user_id, chain_name, validator_address)
-    )
+    cursor.execute("DELETE FROM validators WHERE user_id = ? AND chain_name = ? AND validator_address = ?", (user_id, chain_name, validator_address))
     conn.commit()
     rows_affected = cursor.rowcount
     conn.close()
     return rows_affected > 0
 
-def get_user_validators(user_id: int) -> List[Tuple]:
-    """
-    Retrieves all validators registered by a specific Discord user.
-
-    Args:
-        user_id (int): The Discord user ID.
-
-    Returns:
-        List[Tuple]: A list of tuples, each containing (chain_name, validator_address, moniker, status, missed_blocks).
-    """
+def get_user_validators(user_id):
+    """Retrieves a list of validators registered by a specific user."""
     conn = sqlite3.connect(DATABASE_NAME)
     cursor = conn.cursor()
-    cursor.execute(
-        "SELECT chain_name, validator_address, moniker, status, missed_blocks FROM validators WHERE user_id = ?",
-        (user_id,)
-    )
+    cursor.execute("SELECT chain_name, validator_address, moniker, status, missed_blocks FROM validators WHERE user_id = ?", (user_id,))
     validators = cursor.fetchall()
     conn.close()
     return validators
 
-def get_user_validators_by_chain(user_id: int, chain_name: str) -> List[Tuple]:
-    """
-    Retrieves validators registered by a specific user for a given blockchain chain.
-
-    Args:
-        user_id (int): The Discord user ID.
-        chain_name (str): The name of the blockchain.
-
-    Returns:
-        List[Tuple]: A list of tuples, each containing (chain_name, validator_address, moniker, status, missed_blocks).
-    """
+def get_user_validators_by_chain(user_id, chain_name):
+    """Retrieves a list of validators registered by a specific user for a given chain."""
     conn = sqlite3.connect(DATABASE_NAME)
     cursor = conn.cursor()
     cursor.execute(
@@ -127,19 +87,8 @@ def get_user_validators_by_chain(user_id: int, chain_name: str) -> List[Tuple]:
     conn.close()
     return validators
 
-def get_user_validator_details(user_id: int, chain_name: str, validator_address: str) -> Optional[Tuple]:
-    """
-    Retrieves full details for a specific validator registered by a user.
-
-    Args:
-        user_id (int): The Discord user ID.
-        chain_name (str): The name of the blockchain.
-        validator_address (str): The validator's operator address.
-
-    Returns:
-        Optional[Tuple]: A tuple containing all details if found, otherwise None.
-                        Tuple format: (chain_name, validator_address, user_id, channel_id, moniker, status, missed_blocks, notifications_enabled)
-    """
+def get_user_validator_details(user_id, chain_name, validator_address):
+    """Retrieves full details for a specific validator registered by a user."""
     conn = sqlite3.connect(DATABASE_NAME)
     cursor = conn.cursor()
     cursor.execute(
@@ -148,47 +97,30 @@ def get_user_validator_details(user_id: int, chain_name: str, validator_address:
     )
     validator = cursor.fetchone()
     conn.close()
-    return validator
+    return validator # Returns None if not found, or a tuple of details
 
-def get_all_validators_to_monitor() -> List[Tuple]:
-    """
-    Retrieves all registered validators that have notifications enabled.
-    This is used by the background monitoring task.
 
-    Returns:
-        List[Tuple]: A list of tuples, each containing
-                     (chain_name, validator_address, user_id, channel_id, moniker, status, missed_blocks).
-    """
+def get_all_validators_to_monitor():
+    """Retrieves all registered validators for monitoring."""
     conn = sqlite3.connect(DATABASE_NAME)
     cursor = conn.cursor()
-    cursor.execute(
-        "SELECT chain_name, validator_address, user_id, channel_id, moniker, status, missed_blocks FROM validators WHERE notifications_enabled = 1"
-    )
+    cursor.execute("SELECT chain_name, validator_address, user_id, channel_id, moniker, status, missed_blocks FROM validators WHERE notifications_enabled = 1")
     validators = cursor.fetchall()
     conn.close()
     return validators
 
-def update_validator_status(chain_name: str, validator_address: str, new_status: str, new_missed_blocks: int, last_check_time: str, moniker: Optional[str] = None):
-    """
-    Updates the operational status, missed blocks count, last check time, and optionally moniker
-    for a specific validator in the database.
-
-    Args:
-        chain_name (str): The name of the blockchain.
-        validator_address (str): The validator's operator address.
-        new_status (str): The updated status of the validator.
-        new_missed_blocks (int): The updated missed blocks count.
-        last_check_time (str): ISO formatted string of the last check time.
-        moniker (Optional[str]): The updated moniker. If None, moniker is not updated.
-    """
+def update_validator_status(chain_name, validator_address, new_status, new_missed_blocks, last_check_time, moniker=None):
+    """Updates the validator's status and optionally moniker in the database."""
     conn = sqlite3.connect(DATABASE_NAME)
     cursor = conn.cursor()
     if moniker:
+        # If moniker is provided, update moniker along with other fields
         cursor.execute(
             "UPDATE validators SET status = ?, missed_blocks = ?, last_check_time = ?, moniker = ? WHERE chain_name = ? AND validator_address = ?",
             (new_status, new_missed_blocks, last_check_time, moniker, chain_name, validator_address)
         )
     else:
+        # If moniker is NOT provided, update only status, missed_blocks, and last_check_time
         cursor.execute(
             "UPDATE validators SET status = ?, missed_blocks = ?, last_check_time = ? WHERE chain_name = ? AND validator_address = ?",
             (new_status, new_missed_blocks, last_check_time, chain_name, validator_address)
@@ -196,19 +128,8 @@ def update_validator_status(chain_name: str, validator_address: str, new_status:
     conn.commit()
     conn.close()
 
-def set_validator_notifications(user_id: int, chain_name: str, validator_address: str, enabled: bool) -> bool:
-    """
-    Enables or disables notifications for a specific validator registered by a user.
-
-    Args:
-        user_id (int): The Discord user ID.
-        chain_name (str): The name of the blockchain.
-        validator_address (str): The validator's operator address.
-        enabled (bool): True to enable notifications, False to disable.
-
-    Returns:
-        bool: True if the notification status was updated, False if the validator was not found.
-    """
+def set_validator_notifications(user_id, chain_name, validator_address, enabled):
+    """Sets the notification status for a specific validator."""
     conn = sqlite3.connect(DATABASE_NAME)
     cursor = conn.cursor()
     cursor.execute(
@@ -219,3 +140,65 @@ def set_validator_notifications(user_id: int, chain_name: str, validator_address
     rows_affected = cursor.rowcount
     conn.close()
     return rows_affected > 0
+
+# --- NEW FUNCTIONS FOR CHAIN NOTIFICATION SETTINGS ---
+
+def set_chain_notification_preference(channel_id, chain_name, notify_gov_enabled, notify_upgrade_enabled, mention_type):
+    """
+    Sets or updates notification preferences for governance and upgrades for a specific channel and chain.
+    """
+    conn = sqlite3.connect(DATABASE_NAME)
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            """
+            INSERT INTO chain_notification_settings (channel_id, chain_name, notify_gov_enabled, notify_upgrade_enabled, mention_type)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(channel_id, chain_name) DO UPDATE SET
+                notify_gov_enabled = ?,
+                notify_upgrade_enabled = ?,
+                mention_type = ?;
+            """,
+            (channel_id, chain_name, 1 if notify_gov_enabled else 0, 1 if notify_upgrade_enabled else 0, mention_type,
+             1 if notify_gov_enabled else 0, 1 if notify_upgrade_enabled else 0, mention_type)
+        )
+        conn.commit()
+        return True
+    except Exception as e:
+        print(f"Error setting chain notification preference: {e}")
+        return False
+    finally:
+        conn.close()
+
+def get_chain_notification_preferences(chain_name):
+    """
+    Retrieves all channels configured to receive notifications for a specific chain's governance or upgrades.
+    Returns a list of dictionaries with channel_id, notify_gov_enabled, notify_upgrade_enabled, and mention_type.
+    """
+    conn = sqlite3.connect(DATABASE_NAME)
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT channel_id, notify_gov_enabled, notify_upgrade_enabled, mention_type
+        FROM chain_notification_settings
+        WHERE chain_name = ? AND (notify_gov_enabled = 1 OR notify_upgrade_enabled = 1);
+        """,
+        (chain_name,)
+    )
+    # Fetch all results and convert to list of dictionaries for easier access
+    columns = [description[0] for description in cursor.description]
+    results = [dict(zip(columns, row)) for row in cursor.fetchall()]
+    conn.close()
+    return results
+
+def get_all_chain_notification_chains():
+    """
+    Retrieves all unique chain names that have notification settings configured.
+    Useful for monitor tasks to know which chains to check.
+    """
+    conn = sqlite3.connect(DATABASE_NAME)
+    cursor = conn.cursor()
+    cursor.execute("SELECT DISTINCT chain_name FROM chain_notification_settings WHERE notify_gov_enabled = 1 OR notify_upgrade_enabled = 1;")
+    chains = [row[0] for row in cursor.fetchall()]
+    conn.close()
+    return chains
