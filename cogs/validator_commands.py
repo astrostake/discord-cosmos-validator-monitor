@@ -55,21 +55,47 @@ class ValidatorCommands(commands.Cog):
     @app_commands.command(name="myvalidators", description="Displays a list of all your registered validators.")
     async def myvalidators(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
+
         validators = db_manager.get_user_validators(interaction.user.id)
         if not validators:
             await interaction.followup.send("You are not currently monitoring any validators.")
             return
 
+        # Ambil Cog monitoring untuk mengakses cache-nya
+        monitoring_cog = self.bot.get_cog('MonitoringTasks')
+        if not monitoring_cog:
+            await interaction.followup.send("Error: Monitoring service is not available. Cannot fetch uptime data.")
+            return
+
         embeds = []
         for chain, val_addr, _, _, _ in validators:
             chain_config = self.bot.supported_chains.get(chain)
-            status_info = await get_validator_info(self.bot.async_client, chain_config, val_addr, {}, {})
+            if not chain_config:
+                continue
+
+            # Ambil cache yang benar untuk chain yang bersangkutan
+            slashing_info = monitoring_cog._slashing_info_cache.get(chain, {})
+            slashing_params = monitoring_cog._slashing_params_cache.get(chain, {})
+
+            # Panggil helper dengan data cache yang sudah diisi
+            status_info = await get_validator_info(
+                self.bot.async_client, 
+                chain_config, 
+                val_addr, 
+                slashing_info, 
+                slashing_params
+            )
+            
             embed = await create_validator_status_embed(self.bot.user, chain, val_addr, status_info)
             embeds.append(embed)
         
         # Kirim embed dalam batch 10 untuk menghindari limit Discord
-        for i in range(0, len(embeds), 10):
-            await interaction.followup.send(embeds=embeds[i:i+10])
+        if embeds:
+            for i in range(0, len(embeds), 10):
+                await interaction.followup.send(embeds=embeds[i:i+10])
+        else:
+            # Fallback jika tidak ada validator yang bisa diproses
+            await interaction.followup.send("Could not process any of your registered validators.")
 
     @app_commands.command(name="validator_status", description="Gets instant status for a specific validator.")
     @app_commands.describe(chain_name="Name of the chain", validator_address="Validator address")
