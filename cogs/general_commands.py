@@ -132,9 +132,23 @@ class GeneralCommands(commands.Cog):
             )
 
             for prop in proposals[:25]:
-                prop_id = prop.get('proposal_id', 'N/A')
-                content = prop.get('content', {})
-                prop_title = content.get('title', f"Proposal #{prop_id}")
+                prop_id = prop.get('id') or prop.get('proposal_id', 'N/A')
+                
+                # --- LOGIKA PARSING BARU YANG LEBIH CANGGIH ---
+                prop_title = prop.get('title')
+                if not prop_title:
+                    prop_title = prop.get('content', {}).get('title')
+                
+                if not prop_title and 'metadata' in prop:
+                    try:
+                        metadata_json = json.loads(base64.b64decode(prop['metadata']))
+                        prop_title = metadata_json.get('title')
+                    except Exception:
+                        pass # Biarkan kosong jika metadata gagal di-decode
+
+                if not prop_title:
+                    prop_title = f"Proposal #{prop_id}"
+                # --- AKHIR DARI LOGIKA PARSING BARU ---
                 
                 voting_end_time_str = prop.get('voting_end_time')
                 voting_ends_text = "Voting end time not available."
