@@ -1,38 +1,39 @@
 # Cosmos Validator Monitoring Discord Bot
 
-This Discord bot provides real-time monitoring and alerts for your Cosmos SDK-based blockchain validators directly within your Discord server. Stay informed about your validator's operational status, missed blocks, and other critical events.
+This Discord bot provides real-time monitoring and alerts for your Cosmos SDK-based blockchain validators directly within your Discord server. Stay informed about your validator's operational status, missed blocks, and other critical events with clean, professional embeds.
 
 ## ✨ Features
 
-* **Multi-Chain Support**: Easily add and monitor validators across various Cosmos SDK chains. The bot is designed to be highly configurable for new chains.
-* **Real-time Alerts**: Get instant notifications for crucial validator events:
-    * Validator being **JAILED** (🚨) or recovering from a jailed state.
-    * Changes in staking status (e.g., `BONDED`, `UNBONDING`, `UNBONDED`).
-    * Significant increases in **Missed Blocks** (if supported by the chain's API).
-    * API errors when fetching validator data, indicating potential issues with the chain's RPC endpoint.
-    * Governance Proposals: New, voting period, final results.
-    * Chain Upgrades: New plan announcements, and status.
-* **Detailed Status Information**: Retrieve comprehensive current validator status, including moniker, jailed status, total stake, and estimated uptime.
-* **Personalized Monitoring**: Register your own validators and receive dedicated mentions for important alerts, ensuring you don't miss critical updates.
-* **Easy Management**: Simple Discord slash commands allow you to register, unregister, and check the status of your monitored validators effortlessly.
+* **Multi-Chain Support**: Easily add and monitor validators across various Cosmos SDK chains by editing a simple YAML configuration file.
+* **Real-time Alerts**: Get instant notifications for crucial events:
+    * Validator being **JAILED** (🚨) or recovering.
+    * Changes in staking status (e.g., `BONDED`, `UNBONDING`).
+    * Reaching a threshold of **Missed Blocks**.
+    * New **Governance Proposals** and changes in their status (Voting Period, Passed, Rejected).
+    * Scheduled **Chain Upgrades**.
+* **Detailed & Modern Status**: Retrieve comprehensive validator status with a clean embed design, including moniker, jailed status, total stake, and an estimated uptime with a visual progress bar.
+* **Personalized Monitoring**: Register your validators and receive dedicated mentions for important alerts.
+* **Easy Management**: Simple and intuitive Discord slash commands allow you to manage your monitoring list effortlessly.
 
 ## ⛓️ Supported Chains
 
-The bot's configuration is flexible and can be expanded to support any Cosmos SDK chain. Currently, it includes configurations for:
+The bot's configuration is highly flexible. To add, remove, or modify a supported chain, simply edit the **`config.yaml`** file.
 
-* **Empe Testnet**
-* **Lumera Testnet**
+Currently, the default configuration includes:
 
-To add more chains, you'll need to update the `SUPPORTED_CHAINS` dictionary in `bot.py` with the chain's REST API URL, validator operator prefix, consensus address prefix, and token symbol.
+* **Empeiria Testnet**
+* **Lumera Mainnet & Testnet**
+* **Paxi Mainnet**
+* **Safrochain Testnet**
 
 ## 🚀 Setup Instructions
 
-Follow these steps to get the bot up and running on your system.
+Follow these steps to get the bot up and running.
 
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/astrostake/discord-cosmos-validator-monitor.git
+git clone [https://github.com/astrostake/discord-cosmos-validator-monitor.git](https://github.com/astrostake/discord-cosmos-validator-monitor.git)
 cd discord-cosmos-validator-monitor
 ```
 
@@ -43,7 +44,7 @@ cd discord-cosmos-validator-monitor
 3. Provide a name for your application (e.g., "Cosmos Validator Monitor").
 4. Go to the "Bot" tab on the left sidebar.
 5. Click "Add Bot" and confirm with "Yes, do it!".
-6. Under "Privileged Gateway Intents", ensure **PRESENCE INTENT** and **MESSAGE CONTENT INTENT** are enabled. These are crucial for the bot's functionality.
+6. Under "Privileged Gateway Intents", ensure **SERVER MEMBERS INTENT** and **MESSAGE CONTENT INTENT** are enabled. These are crucial for the bot's functionality.
 7. Click "Reset Token" and securely copy your bot token. Never share this token or commit it directly to version control!
 
 ### 3. Configure Environment Variables
@@ -95,14 +96,6 @@ You should see output indicating that the bot is logging in and is ready.
 5. Copy the generated URL and open it in your web browser.
 6. Choose the Discord server you wish to invite the bot to and click "Authorize".
 
-### 7. Sync Slash Commands
-
-After the bot is running and added to your server, you need to synchronize its slash commands. In any Discord channel where the bot has permission to send messages, type:
-
-`!sync`
-
-- Note: This command can only be executed by the bot's owner (the Discord account that created the bot application).
-
 ## 📋 Commands
 All bot commands are implemented as Discord slash commands, accessible by typing / in the chat and selecting from the suggestions.
 
@@ -112,25 +105,31 @@ All bot commands are implemented as Discord slash commands, accessible by typing
     - Example: `/register empe empevaloper123abc...`
 - `/unregister <chain_name> <validator_address>`: Removes a validator from your monitoring list.
 - `/myvalidators`: Provides an overview of all validators you have registered, showing their current real-time status.
-- `/vals <chain_name>`: Lists and displays the real-time status of only the validators you have registered on a specific chain.
 - `/validator_status <chain_name> <validator_address>`: Fetches and displays the immediate status of any given validator, whether it's registered by you or not.
-- `/set_notifications <chain_name> <validator_address> <on/off>`: Toggles (enables/disables) notification alerts for a specific validator you have registered.
-- `/notification_channel <chain_name> <validator_address>`: Shows which Discord channel is configured to receive notifications for a particular registered validator.
 - `/set_chain_notifications <chain> <gov_on/off> <up_on/off> <mention_here>`: Configure governance & upgrade alerts for THIS channel.
 - `/test_notification`: Sends a sample notification embed to the current channel, demonstrating the bot's alert message format.
 
 ## 📂 Project Structure
 
+The project uses a modern, modular structure for better organization and scalability.
+
 ```
 .
-├── bot.py                # Core Discord bot logic, command handlers, and monitoring tasks.
-├── db_manager.py         # Module for handling all SQLite database interactions (add, remove, update validators).
-├── validator_monitor.db  # SQLite database file; automatically created upon first bot run.
-├── .env                  # Stores sensitive environment variables (e.g., DISCORD_BOT_TOKEN). This file is ignored by Git.
-├── .env.example          # A template file to guide users on setting up their .env.
-├── .gitignore            # Defines files and directories that Git should ignore.
-├── requirements.txt      # Lists all Python dependencies required to run the bot.
-└── README.md             # This comprehensive README file.
+├── bot.py                # Main bot entry point. Loads config and Cogs.
+├── config.yaml           # All chain-specific configurations (API URLs, prefixes, etc.).
+├── db_manager.py         # Handles all SQLite database interactions.
+├── requirements.txt      # Lists all Python dependencies.
+├── .env                  # Stores the secret Discord bot token.
+├── validator_monitor.db  # SQLite database file (created automatically).
+│
+├── cogs/                 # Directory for all bot modules (Cogs).
+│   ├── general_commands.py      # Contains general-purpose commands (/help, /list_chains).
+│   ├── monitoring_tasks.py      # Contains all background monitoring loops.
+│   └── validator_commands.py    # Contains validator-specific commands (/register, /myvalidators).
+│
+└── utils/                # Directory for helper functions.
+    ├── api_helpers.py           # Functions for fetching and processing data from chain APIs.
+    └── embed_factory.py         # Functions for creating standardized Discord embeds.
 ```
 
 ## 🤝 Contributing
