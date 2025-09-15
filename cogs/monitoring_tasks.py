@@ -4,6 +4,8 @@
 import asyncio
 import datetime
 import logging
+import base64
+import json
 
 import discord
 import httpx
@@ -169,20 +171,42 @@ class MonitoringTasks(commands.Cog):
 
                 old_proposals = self._governance_proposals_cache[chain_name]
                 for prop_id, prop_data in current_proposals.items():
-                    if prop_id not in old_proposals and prop_data.get('status') == "PROPOSAL_STATUS_VOTING_PERIOD":
+                    old_prop = old_proposals.get(prop_id)
+                    new_status = prop_data.get('status')
+                    
+                    if not old_prop and new_status == "PROPOSAL_STATUS_VOTING_PERIOD":
                         await self.send_governance_notification(chain_name, prop_data, "new_voting_period")
-                
+                    elif old_prop and new_status != old_prop.get('status'):
+                        if new_status == "PROPOSAL_STATUS_VOTING_PERIOD":
+                             await self.send_governance_notification(chain_name, prop_data, "new_voting_period")
+                        elif new_status in ["PROPOSAL_STATUS_PASSED", "PROPOSAL_STATUS_REJECTED", "PROPOSAL_STATUS_FAILED"]:
+                            await self.send_governance_notification(chain_name, prop_data, "final_result")
+
                 self._governance_proposals_cache[chain_name] = current_proposals
             except Exception as e:
                 logging.error(f"Error processing governance for {chain_name}: {e}")
 
     async def send_governance_notification(self, chain_name, prop_data, notif_type):
         prop_id = prop_data.get('id') or prop_data.get('proposal_id', 'N/A')
-        prop_title = prop_data.get('title') or prop_data.get('content', {}).get('title', f"Proposal #{prop_id}")
+        
+        prop_title = prop_data.get('title')
+        if not prop_title:
+            prop_title = prop_data.get('content', {}).get('title')
+        if not prop_title and 'metadata' in prop_data:
+            try:
+                metadata_json = json.loads(base64.b64decode(prop_data['metadata']))
+                prop_title = metadata_json.get('title')
+            except Exception: pass
+        if not prop_title:
+            prop_title = f"Proposal #{prop_id}"
+
         prop_desc = prop_data.get('summary') or prop_data.get('content', {}).get('description', 'No description.')
-        prop_status = prop_data.get('status', 'UNKNOWN').replace('PROPOSAL_STATUS_', '').replace('_', ' ').title()
+
+        prop_status_raw = prop_data.get('status', 'UNKNOWN')
+        prop_status_clean = prop_status_raw.replace('PROPOSAL_STATUS_', '').replace('_', ' ').title()
 
         title, color, suffix = "", discord.Color.blue(), ""
+
         if notif_type == "new_voting_period":
             title = f"🗳️ Proposal #{prop_id} Enters Voting"
             color = discord.Color.orange()
@@ -192,10 +216,53 @@ class MonitoringTasks(commands.Cog):
                     end_dt = datetime.datetime.fromisoformat(end_time_str.replace('Z', '+00:00'))
                     suffix = f"\n\n**Voting Ends:** <t:{int(end_dt.timestamp())}:R>"
                 except ValueError: pass
+        
+        elif notif_type == "final_result":
+            status_map = {
+                "PROPOSAL_STATUS_PASSED": (f"✅ Proposal #{prop_id} Passed", discord.Color.green()),
+                "PROPOSAL_STATUS_REJECTED": (f"❌ Proposal #{prop_id} Rejected", discord.Color.red()),
+                "PROPOSAL_STATUS_FAILED": (f"🗑️ Proposal #{prop_id} Failed", discord.Color.dark_red()),
+            }
+            title, color = status_map.get(prop_status_raw, (f"ℹ️ Proposal #{prop_id} Concluded", discord.Color.light_grey()))
+
+            # --- LOGIKA PENGAMBILAN TALLY DIMULAI DI SINI ---
+            tally_text = "Could not fetch tally results."
+            chain_config = self.bot.supported_chains.get(chain_name)
+            if chain_config:
+                # Tentukan endpoint berdasarkan versi gov
+                tally_endpoint = "/cosmos/gov/v1/proposals" if "/gov/v1/" in chain_config["gov_proposals_endpoint"] else "/cosmos/gov/v1beta1/proposals"
+                tally_url = f"{chain_config['rest_api_url']}{tally_endpoint}/{prop_id}/tally"
+                try:
+                    tally_response = await self.bot.async_client.get(tally_url)
+                    tally_response.raise_for_status()
+                    tally_data = tally_response.json().get('tally', {})
+                    
+                    yes = int(tally_data.get('yes_count', '0'))
+                    no = int(tally_data.get('no_count', '0'))
+                    veto = int(tally_data.get('no_with_veto_count', '0'))
+                    abstain = int(tally_data.get('abstain_count', '0'))
+                    total = yes + no + veto + abstain
+
+                    if total > 0:
+                        tally_text = (
+                            f"```\n"
+                            f"Yes:         {yes/total:8.2%} ({yes:,})\n"
+                            f"No:          {no/total:8.2%} ({no:,})\n"
+                            f"No w/ Veto:  {veto/total:8.2%} ({veto:,})\n"
+                            f"Abstain:     {abstain/total:8.2%} ({abstain:,})\n"
+                            f"```"
+                        )
+                    else:
+                        tally_text = "No votes were recorded."
+                except Exception as e:
+                    logging.error(f"Failed to fetch tally for prop {prop_id} on {chain_name}: {e}")
+            
+            suffix = f"\n\n**Final Tally:**\n{tally_text}"
+            # --- LOGIKA TALLY SELESAI ---
 
         embed = discord.Embed(title=title, description=f"**{prop_title}**\n\n{prop_desc}{suffix}", color=color, timestamp=datetime.datetime.now(datetime.timezone.utc))
         embed.add_field(name="Chain", value=chain_name.upper())
-        embed.add_field(name="Status", value=prop_status)
+        embed.add_field(name="Status", value=prop_status_clean)
         embed.set_footer(text=f"Monitored by {self.bot.user.name}")
 
         configs = db_manager.get_chain_notification_preferences(chain_name)

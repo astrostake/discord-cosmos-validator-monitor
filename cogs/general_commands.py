@@ -6,6 +6,8 @@ from discord import app_commands
 from discord.ext import commands
 import datetime
 import logging
+import base64
+import json
 
 import db_manager
 from utils.embed_factory import create_validator_status_embed
@@ -98,7 +100,7 @@ class GeneralCommands(commands.Cog):
         except Exception as e:
             await interaction.followup.send(f"An unexpected error occurred: {e}")
 
-    @app_commands.command(name="active_proposals", description="Displays active governance proposals for a chain.")
+    @app_commands.command(name="active_proposals", description="Displays active governance proposals and their tally.")
     @app_commands.describe(chain_name="Name of the chain")
     async def active_proposals(self, interaction: discord.Interaction, chain_name: str):
         await interaction.response.defer(ephemeral=False)
@@ -131,37 +133,51 @@ class GeneralCommands(commands.Cog):
                 timestamp=datetime.datetime.now(datetime.timezone.utc)
             )
 
-            for prop in proposals[:25]:
+            for prop in proposals[:10]: # Batasi 10 proposal untuk menghindari rate limit API
                 prop_id = prop.get('id') or prop.get('proposal_id', 'N/A')
                 
-                # --- LOGIKA PARSING BARU YANG LEBIH CANGGIH ---
-                prop_title = prop.get('title')
-                if not prop_title:
-                    prop_title = prop.get('content', {}).get('title')
-                
+                prop_title = prop.get('title') or prop.get('content', {}).get('title')
                 if not prop_title and 'metadata' in prop:
                     try:
                         metadata_json = json.loads(base64.b64decode(prop['metadata']))
                         prop_title = metadata_json.get('title')
-                    except Exception:
-                        pass # Biarkan kosong jika metadata gagal di-decode
+                    except Exception: pass
+                if not prop_title: prop_title = f"Proposal #{prop_id}"
 
-                if not prop_title:
-                    prop_title = f"Proposal #{prop_id}"
-                # --- AKHIR DARI LOGIKA PARSING BARU ---
-                
+                # --- PENGAMBILAN TALLY UNTUK SETIAP PROPOSAL ---
+                tally_text = "Fetching tally..."
+                tally_endpoint = "/cosmos/gov/v1/proposals" if "/gov/v1/" in chain_config["gov_proposals_endpoint"] else "/cosmos/gov/v1beta1/proposals"
+                tally_url = f"{chain_config['rest_api_url']}{tally_endpoint}/{prop_id}/tally"
+                try:
+                    tally_response = await self.bot.async_client.get(tally_url)
+                    tally_response.raise_for_status()
+                    tally_data = tally_response.json().get('tally', {})
+                    
+                    yes = int(tally_data.get('yes_count', '0'))
+                    no = int(tally_data.get('no_count', '0'))
+                    veto = int(tally_data.get('no_with_veto_count', '0'))
+                    abstain = int(tally_data.get('abstain_count', '0'))
+                    total = yes + no + veto + abstain
+
+                    if total > 0:
+                        tally_text = f"Yes: {yes/total:.2%}, No: {no/total:.2%}, Veto: {veto/total:.2%}"
+                    else:
+                        tally_text = "No votes recorded yet."
+                except Exception:
+                    tally_text = "Could not fetch tally."
+                # --- AKHIR DARI PENGAMBILAN TALLY ---
+
                 voting_end_time_str = prop.get('voting_end_time')
-                voting_ends_text = "Voting end time not available."
+                voting_ends_text = ""
                 if voting_end_time_str:
                     try:
                         end_dt = datetime.datetime.fromisoformat(voting_end_time_str.replace('Z', '+00:00'))
-                        voting_ends_text = f"Voting ends <t:{int(end_dt.timestamp())}:R>"
-                    except ValueError:
-                        voting_ends_text = "Could not parse voting end time."
+                        voting_ends_text = f" • Ends <t:{int(end_dt.timestamp())}:R>"
+                    except ValueError: pass
                 
                 embed.add_field(
                     name=f"#{prop_id}: {prop_title}",
-                    value=voting_ends_text,
+                    value=f"**Tally:** `{tally_text}`{voting_ends_text}",
                     inline=False
                 )
 
@@ -171,7 +187,6 @@ class GeneralCommands(commands.Cog):
         except Exception as e:
             logging.error(f"Error fetching active proposals for {chain_name}: {e}")
             await interaction.followup.send(f"An error occurred while fetching proposals for **{chain_name.upper()}**. Please try again later.")
-
 
 async def setup(bot: commands.Bot):
     """Fungsi wajib untuk me-load Cog."""
