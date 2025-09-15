@@ -1,0 +1,69 @@
+# config.yaml
+# File ini berisi semua konfigurasi untuk setiap blockchain yang didukung.
+# Menggunakan YAML membuat penambahan atau pengubahan chain menjadi lebih mudah
+# tanpa perlu mengubah kode Python utama.
+
+empe:
+  rest_api_url: "https://empeiria-testnet-api.itrocket.net"
+  valoper_prefix: "empevaloper"
+  valcons_prefix: "empevalcons"
+  token_symbol: "EMPE"
+  base_denom: "uempe"
+  decimals: 6
+  missed_blocks_supported: true
+  signing_infos_endpoint: "/cosmos/slashing/v1beta1/signing_infos?pagination.limit=500"
+  slashing_params_endpoint: "/cosmos/slashing/v1beta1/params"
+  gov_proposals_endpoint: "/cosmos/gov/v1beta1/proposals"
+  current_plan_endpoint: "/cosmos/upgrade/v1beta1/current_plan"
+
+lumera-mainnet:
+  rest_api_url: "https://lumera-rest.publicnode.com"
+  valoper_prefix: "lumeravaloper"
+  valcons_prefix: "lumeravalcons"
+  token_symbol: "LUME"
+  base_denom: "ulume"
+  decimals: 6
+  missed_blocks_supported: true
+  signing_infos_endpoint: "/cosmos/slashing/v1beta1/signing_infos?pagination.limit=300"
+  slashing_params_endpoint: "/cosmos/slashing/v1beta1/params"
+  gov_proposals_endpoint: "/cosmos/gov/v1beta1/proposals"
+  current_plan_endpoint: "/cosmos/upgrade/v1beta1/current_plan"
+
+lumera:
+  rest_api_url: "https://lumera-testnet-api.polkachu.com"
+  valoper_prefix: "lumeravaloper"
+  valcons_prefix: "lumeravalcons"
+  token_symbol: "LUME"
+  base_denom: "ulume"
+  decimals: 6
+  missed_blocks_supported: true
+  signing_infos_endpoint: "/cosmos/slashing/v1beta1/signing_infos?pagination.limit=300"
+  slashing_params_endpoint: "/cosmos/slashing/v1beta1/params"
+  gov_proposals_endpoint: "/cosmos/gov/v1beta1/proposals"
+  current_plan_endpoint: "/cosmos/upgrade/v1beta1/current_plan"
+
+paxi:
+  rest_api_url: "https://mainnet-lcd.paxinet.io"
+  valoper_prefix: "paxivaloper"
+  valcons_prefix: "paxivalcons"
+  token_symbol: "PAXI"
+  base_denom: "upaxi"
+  decimals: 6
+  missed_blocks_supported: true
+  signing_infos_endpoint: "/cosmos/slashing/v1beta1/signing_infos?pagination.limit=300"
+  slashing_params_endpoint: "/cosmos/slashing/v1beta1/params"
+  gov_proposals_endpoint: "/cosmos/gov/v1beta1/proposals"
+  current_plan_endpoint: "/cosmos/upgrade/v1beta1/current_plan"
+
+safrochain:
+  rest_api_url: "https://rest.testnet.safrochain.com"
+  valoper_prefix: "addr_safrovaloper"
+  valcons_prefix: "addr_safrovalcons"
+  token_symbol: "SAF"
+  base_denom: "usaf"
+  decimals: 6
+  missed_blocks_supported: true
+  signing_infos_endpoint: "/cosmos/slashing/v1beta1/signing_infos?pagination.limit=300"
+  slashing_params_endpoint: "/cosmos/slashing/v1beta1/params"
+  gov_proposals_endpoint: "/cosmos/gov/v1beta1/proposals"
+  current_plan_endpoint: "/cosmos/upgrade/v1beta1/current_plan"

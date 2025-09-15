@@ -13,3 +13,5 @@ env/
 
 # Environment variables
 .env
+
+.vscode/
