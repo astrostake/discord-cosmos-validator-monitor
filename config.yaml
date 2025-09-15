@@ -65,5 +65,5 @@ safrochain:
   missed_blocks_supported: true
   signing_infos_endpoint: "/cosmos/slashing/v1beta1/signing_infos?pagination.limit=300"
   slashing_params_endpoint: "/cosmos/slashing/v1beta1/params"
-  gov_proposals_endpoint: "/cosmos/gov/v1beta1/proposals"
+  gov_proposals_endpoint: "/cosmos/gov/v1/proposals"
   current_plan_endpoint: "/cosmos/upgrade/v1beta1/current_plan"

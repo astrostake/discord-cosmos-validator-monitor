@@ -33,7 +33,7 @@ Follow these steps to get the bot up and running.
 ### 1. Clone the Repository
 
 ```bash
-git clone [https://github.com/astrostake/discord-cosmos-validator-monitor.git](https://github.com/astrostake/discord-cosmos-validator-monitor.git)
+git clone https://github.com/astrostake/discord-cosmos-validator-monitor.git
 cd discord-cosmos-validator-monitor
 ```
 
@@ -107,6 +107,7 @@ All bot commands are implemented as Discord slash commands, accessible by typing
 - `/myvalidators`: Provides an overview of all validators you have registered, showing their current real-time status.
 - `/validator_status <chain_name> <validator_address>`: Fetches and displays the immediate status of any given validator, whether it's registered by you or not.
 - `/set_chain_notifications <chain> <gov_on/off> <up_on/off> <mention_here>`: Configure governance & upgrade alerts for THIS channel.
+- `/active_proposals <chain_name>`: Displays all active governance proposals for a specific chain.
 - `/test_notification`: Sends a sample notification embed to the current channel, demonstrating the bot's alert message format.
 
 ## 📂 Project Structure
