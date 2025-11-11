@@ -61,16 +61,29 @@ class GeneralCommands(commands.Cog):
     @app_commands.describe(
         chain_name="Name of the chain", 
         enable_gov="Enable governance alerts (True/False)", 
-        enable_upgrade="Enable upgrade alerts (True/False)"
+        enable_upgrade="Enable upgrade alerts (True/False)",
+        mention_type="Type of mention to use for alerts"
     )
-    async def set_chain_notifications(self, interaction: discord.Interaction, chain_name: str, enable_gov: bool, enable_upgrade: bool):
+    @app_commands.choices(mention_type=[
+        app_commands.Choice(name="No Mention", value="none"),
+        app_commands.Choice(name="Mention @here", value="here"),
+        app_commands.Choice(name="Mention @everyone", value="everyone"),
+    ])
+    async def set_chain_notifications(
+        self, interaction: discord.Interaction, 
+        chain_name: str, 
+        enable_gov: bool, 
+        enable_upgrade: bool, 
+        mention_type: app_commands.Choice[str] = None
+    ):
         await interaction.response.defer(ephemeral=True)
         chain_name = chain_name.lower()
         if chain_name not in self.bot.supported_chains:
             await interaction.followup.send(f"❌ Error: Chain `{chain_name}` is not supported.")
             return
 
-        db_manager.set_chain_notification_preference(interaction.channel_id, chain_name, enable_gov, enable_upgrade, None)
+        mention_value = mention_type.value if mention_type else "none" # 'none' adalah default baru
+        db_manager.set_chain_notification_preference(interaction.channel_id, chain_name, enable_gov, enable_upgrade, mention_value)
         await interaction.followup.send(f"✅ Success: Notification preferences for **{chain_name.upper()}** have been updated in this channel.")
 
     @app_commands.command(name="test_notification", description="Sends a sample notification to this channel.")

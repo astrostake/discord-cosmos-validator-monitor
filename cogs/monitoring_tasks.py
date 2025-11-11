@@ -163,25 +163,34 @@ class MonitoringTasks(commands.Cog):
                 response.raise_for_status()
                 data = response.json()
                 
+                # DAPATKAN CACHE LAMA SEBELUM DIPERBARUI
+                old_proposals = self._governance_proposals_cache.get(chain_name, {})
                 current_proposals = {p.get('id') or p.get('proposal_id'): p for p in data.get('proposals', [])}
 
-                if chain_name not in self._governance_proposals_cache:
+                # JIKA CACHE MEMANG KOSONG (BOT BARU JALAN), ISI SAJA DAN SKIP NOTIF 1x
+                if not self._governance_proposals_cache.get(chain_name):
                     self._governance_proposals_cache[chain_name] = current_proposals
                     continue
 
-                old_proposals = self._governance_proposals_cache[chain_name]
                 for prop_id, prop_data in current_proposals.items():
                     old_prop = old_proposals.get(prop_id)
                     new_status = prop_data.get('status')
                     
-                    if not old_prop and new_status == "PROPOSAL_STATUS_VOTING_PERIOD":
-                        await self.send_governance_notification(chain_name, prop_data, "new_voting_period")
+                    if not old_prop:
+                        # Proposal baru yang tidak ada di cache
+                        if new_status == "PROPOSAL_STATUS_VOTING_PERIOD":
+                            await self.send_governance_notification(chain_name, prop_data, "new_voting_period")
+                        elif new_status == "PROPOSAL_STATUS_DEPOSIT_PERIOD":
+                            await self.send_governance_notification(chain_name, prop_data, "new_deposit_period")
+
                     elif old_prop and new_status != old_prop.get('status'):
+                        # Proposal yang statusnya berubah
                         if new_status == "PROPOSAL_STATUS_VOTING_PERIOD":
                              await self.send_governance_notification(chain_name, prop_data, "new_voting_period")
                         elif new_status in ["PROPOSAL_STATUS_PASSED", "PROPOSAL_STATUS_REJECTED", "PROPOSAL_STATUS_FAILED"]:
                             await self.send_governance_notification(chain_name, prop_data, "final_result")
 
+                # PERBARUI CACHE DI AKHIR SETELAH SEMUA PROSES SELESAI
                 self._governance_proposals_cache[chain_name] = current_proposals
             except Exception as e:
                 logging.error(f"Error processing governance for {chain_name}: {e}")
@@ -207,7 +216,17 @@ class MonitoringTasks(commands.Cog):
 
         title, color, suffix = "", discord.Color.blue(), ""
 
-        if notif_type == "new_voting_period":
+        if notif_type == "new_deposit_period":
+            title = f"🆕 Proposal #{prop_id} in Deposit Period"
+            color = discord.Color.blue()
+            end_time_str = prop_data.get('deposit_end_time')
+            if end_time_str:
+                try:
+                    end_dt = datetime.datetime.fromisoformat(end_time_str.replace('Z', '+00:00'))
+                    suffix = f"\n\n**Deposit Ends:** <t:{int(end_dt.timestamp())}:R>"
+                except ValueError: pass
+
+        elif notif_type == "new_voting_period":
             title = f"🗳️ Proposal #{prop_id} Enters Voting"
             color = discord.Color.orange()
             end_time_str = prop_data.get('voting_end_time')
@@ -269,7 +288,18 @@ class MonitoringTasks(commands.Cog):
         for config in configs:
             if config['notify_gov_enabled']:
                 channel = self.bot.get_channel(config['channel_id'])
-                if channel: await channel.send(embed=embed)
+                if channel:
+                    mention_str = None
+                    mention_type = config.get('mention_type')
+                    if mention_type == 'here':
+                        mention_str = '@here'
+                    elif mention_type == 'everyone':
+                        mention_str = '@everyone'
+
+                    try:
+                        await channel.send(content=mention_str, embed=embed)
+                    except Exception as e:
+                        logging.warning(f"Failed to send gov notification to {channel.id}: {e}")
 
     # --- Upgrade Monitoring ---
     @tasks.loop(seconds=UPGRADE_CHECK_INTERVAL_SECONDS)
@@ -298,9 +328,8 @@ class MonitoringTasks(commands.Cog):
     async def send_upgrade_notification(self, chain_name, plan_data):
         plan_name = plan_data.get('name', 'N/A')
         plan_height = int(plan_data.get('height', 0))
-        
-        current_height = await get_latest_block_height(self.bot.async_client, self.bot.supported_chains[chain_name]['rest_api_url'])
-        blocks_remaining = f"{plan_height - current_height:,}" if current_height and plan_height > current_height else "Reached"
+        plan_time_str = plan_data.get('time') # Ambil info waktu
+        plan_info = plan_data.get('info', 'No additional details provided.') # Ambil info detail
 
         embed = discord.Embed(
             title=f"🚀 System Notice: Upcoming Software Upgrade '{plan_name}'",
@@ -308,15 +337,43 @@ class MonitoringTasks(commands.Cog):
             color=discord.Color.purple(),
             timestamp=datetime.datetime.now(datetime.timezone.utc)
         )
-        embed.add_field(name="Target Height", value=f"`{plan_height:,}`")
-        embed.add_field(name="Blocks Remaining", value=f"`{blocks_remaining}`")
+
+        # Tambahkan field berdasarkan data yang tersedia
+        if plan_height > 0:
+            current_height = await get_latest_block_height(self.bot.async_client, self.bot.supported_chains[chain_name]['rest_api_url'])
+            blocks_remaining = f"{plan_height - current_height:,}" if current_height and plan_height > current_height else "Reached"
+            embed.add_field(name="Target Height", value=f"`{plan_height:,}`", inline=True)
+            embed.add_field(name="Blocks Remaining", value=f"`{blocks_remaining}`", inline=True)
+        
+        if plan_time_str:
+            try:
+                plan_dt = datetime.datetime.fromisoformat(plan_time_str.replace('Z', '+00:00'))
+                embed.add_field(name="Target Time (UTC)", value=f"<t:{int(plan_dt.timestamp())}:F>", inline=False)
+            except ValueError:
+                embed.add_field(name="Target Time", value=f"`{plan_time_str}`", inline=False)
+
+        if plan_info:
+            info_text = plan_info if len(plan_info) <= 1000 else plan_info[:1000] + "..."
+            embed.add_field(name="Details", value=f"```\n{info_text}\n```", inline=False)
+
         embed.set_footer(text=f"Monitored by {self.bot.user.name}")
         
         configs = db_manager.get_chain_notification_preferences(chain_name)
         for config in configs:
             if config['notify_upgrade_enabled']:
                 channel = self.bot.get_channel(config['channel_id'])
-                if channel: await channel.send(embed=embed)
+                if channel:
+                    mention_str = None
+                    mention_type = config.get('mention_type')
+                    if mention_type == 'here':
+                        mention_str = '@here'
+                    elif mention_type == 'everyone':
+                        mention_str = '@everyone'
+                    
+                    try:
+                        await channel.send(content=mention_str, embed=embed)
+                    except Exception as e:
+                        logging.warning(f"Failed to send upgrade notification to {channel.id}: {e}")
 
     @monitor_validators.before_loop
     @monitor_governance.before_loop
