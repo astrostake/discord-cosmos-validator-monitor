@@ -16,10 +16,10 @@ from utils.api_helpers import (create_progress_bar, get_latest_block_height,
                                get_validator_info)
 
 # --- Variabel Konfigurasi untuk Cog ini ---
-MONITOR_INTERVAL_SECONDS = 300
+MONITOR_INTERVAL_SECONDS = 60
 GOVERNANCE_CHECK_INTERVAL_SECONDS = 300
 UPGRADE_CHECK_INTERVAL_SECONDS = 3600
-MISSED_BLOCKS_THRESHOLD = 50
+MISSED_BLOCKS_THRESHOLD = 10
 
 class MonitoringTasks(commands.Cog):
     def __init__(self, bot: commands.Bot):
