@@ -102,24 +102,52 @@ class MonitoringTasks(commands.Cog):
         new_status = status_info['status']
         new_jailed = status_info['jailed']
         new_missed = status_info['missed_blocks']
+        
+        # Tentukan status baru untuk disimpan di DB
+        db_status_to_save = new_status # Default "Bonded", "Unbonding", dll.
 
         if new_jailed and not old_status == "JAILED":
             send_notification = True
             alert_title = "🔴 Critical Alert: Validator Jailed"
             embed_color = discord.Color.red()
+            db_status_to_save = "JAILED"
+
         elif not new_jailed and old_status == "JAILED":
             send_notification = True
             alert_title = "🟢 Notice: Validator Recovered"
             embed_color = discord.Color.green()
-        elif new_missed > old_missed and new_missed >= MISSED_BLOCKS_THRESHOLD and old_missed < MISSED_BLOCKS_THRESHOLD:
-            send_notification = True
-            alert_title = "🟠 Warning: Missed Blocks Threshold Reached"
-            embed_color = discord.Color.orange()
+            db_status_to_save = new_status # Kembali ke status "Bonded"
+
+        # Cek missed blocks HANYA jika validator tidak jailed
+        elif not new_jailed:
+            if new_missed >= MISSED_BLOCKS_THRESHOLD:
+                # Validator berada di zona bahaya
+                if old_status != "WARNING_MISSED_BLOCKS":
+                    # Baru saja masuk zona warning ATAU bot baru sadar (setelah restart)
+                    send_notification = True
+                    alert_title = "🟠 Warning: Missed Blocks Threshold Reached"
+                    embed_color = discord.Color.orange()
+                
+                # Tetap set status, meskipun tidak kirim notif (untuk cegah spam)
+                db_status_to_save = "WARNING_MISSED_BLOCKS"
+
+            elif new_missed < MISSED_BLOCKS_THRESHOLD and old_status == "WARNING_MISSED_BLOCKS":
+                # Pulih dari missed blocks (di bawah threshold)
+                send_notification = True
+                alert_title = "🟢 Notice: Validator Recovered (Missed Blocks)"
+                embed_color = discord.Color.green()
+                db_status_to_save = new_status # Kembali ke status "Bonded"
+            
+            # Jika 'new_missed' < 10 dan 'old_status' bukan "WARNING_MISSED_BLOCKS",
+            # 'db_status_to_save' tetap 'new_status' (Bonded), jadi tidak perlu else.
+
 
         if send_notification:
             channel = self.bot.get_channel(channel_id)
             if not channel: return
 
+            # Kita perlu 'chain_config' untuk embed baru (jika Anda tambah explorer)
+            # Jika belum, Anda bisa hapus 'chain_config' dari pemanggilan ini
             embed = await self.create_alert_embed(alert_title, embed_color, chain_name, val_addr, status_info)
             try:
                 user = await self.bot.fetch_user(user_id)
@@ -127,7 +155,8 @@ class MonitoringTasks(commands.Cog):
             except Exception as e:
                 logging.error(f"Failed to send notification to channel {channel_id}: {e}")
 
-        db_manager.update_validator_status(chain_name, val_addr, new_status, new_missed, datetime.datetime.now().isoformat(), status_info['moniker'])
+        # Simpan status baru (JAILED, WARNING_MISSED_BLOCKS, Bonded, dll)
+        db_manager.update_validator_status(chain_name, val_addr, db_status_to_save, new_missed, datetime.datetime.now().isoformat(), status_info['moniker'])
 
     async def create_alert_embed(self, title, color, chain_name, val_addr, status_info):
         embed = discord.Embed(
