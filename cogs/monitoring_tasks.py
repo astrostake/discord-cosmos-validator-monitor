@@ -20,6 +20,7 @@ MONITOR_INTERVAL_SECONDS = 60
 GOVERNANCE_CHECK_INTERVAL_SECONDS = 300
 UPGRADE_CHECK_INTERVAL_SECONDS = 3600
 MISSED_BLOCKS_THRESHOLD = 10
+MIN_STAKE_CHANGE_AMOUNT = 100.0
 
 class MonitoringTasks(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -78,7 +79,8 @@ class MonitoringTasks(commands.Cog):
             await self.check_and_notify_validator_status(val_data)
 
     async def check_and_notify_validator_status(self, val_data):
-        chain_name, val_addr, user_id, channel_id, old_moniker, old_status, old_missed = val_data
+        # Unpack data dari DB (Sekarang ada 8 item karena last_total_stake ditambahkan)
+        chain_name, val_addr, user_id, channel_id, old_moniker, old_status, old_missed, old_stake = val_data
         
         chain_config = self.bot.supported_chains.get(chain_name)
         if not chain_config: return
@@ -90,8 +92,8 @@ class MonitoringTasks(commands.Cog):
         )
 
         if not status_info['success']:
-            # Handle API error
             if old_status != "API_ERROR":
+                # Update DB tanpa mengubah stake jika error
                 db_manager.update_validator_status(chain_name, val_addr, "API_ERROR", old_missed, datetime.datetime.now().isoformat(), old_moniker)
             return
 
@@ -102,10 +104,12 @@ class MonitoringTasks(commands.Cog):
         new_status = status_info['status']
         new_jailed = status_info['jailed']
         new_missed = status_info['missed_blocks']
+        new_stake_raw = status_info.get('raw_stake', 0.0)
         
-        # Tentukan status baru untuk disimpan di DB
-        db_status_to_save = new_status # Default "Bonded", "Unbonding", dll.
+        db_status_to_save = new_status
+        extra_description = "" # Pesan tambahan untuk notifikasi
 
+        # 1. Cek Jailed/Unjailed (Prioritas Tertinggi)
         if new_jailed and not old_status == "JAILED":
             send_notification = True
             alert_title = "🔴 Critical Alert: Validator Jailed"
@@ -116,47 +120,67 @@ class MonitoringTasks(commands.Cog):
             send_notification = True
             alert_title = "🟢 Notice: Validator Recovered"
             embed_color = discord.Color.green()
-            db_status_to_save = new_status # Kembali ke status "Bonded"
-
-        # Cek missed blocks HANYA jika validator tidak jailed
+        
+        # 2. Cek Missed Blocks
         elif not new_jailed:
             if new_missed >= MISSED_BLOCKS_THRESHOLD:
-                # Validator berada di zona bahaya
                 if old_status != "WARNING_MISSED_BLOCKS":
-                    # Baru saja masuk zona warning ATAU bot baru sadar (setelah restart)
                     send_notification = True
                     alert_title = "🟠 Warning: Missed Blocks Threshold Reached"
                     embed_color = discord.Color.orange()
-                
-                # Tetap set status, meskipun tidak kirim notif (untuk cegah spam)
                 db_status_to_save = "WARNING_MISSED_BLOCKS"
 
             elif new_missed < MISSED_BLOCKS_THRESHOLD and old_status == "WARNING_MISSED_BLOCKS":
-                # Pulih dari missed blocks (di bawah threshold)
                 send_notification = True
                 alert_title = "🟢 Notice: Validator Recovered (Missed Blocks)"
                 embed_color = discord.Color.green()
-                db_status_to_save = new_status # Kembali ke status "Bonded"
-            
-            # Jika 'new_missed' < 10 dan 'old_status' bukan "WARNING_MISSED_BLOCKS",
-            # 'db_status_to_save' tetap 'new_status' (Bonded), jadi tidak perlu else.
 
+            # 3. Cek Perubahan Stake (Hanya jika tidak ada masalah kritis lainnya)
+            # Pastikan old_stake valid (> 0) untuk menghindari error pembagian nol di awal
+            elif old_stake > 0 and new_stake_raw > 0:
+                decimals = chain_config.get("decimals", 6)
+                token_symbol = chain_config.get("token_symbol", "TOKENS")
+                
+                # Hitung selisih raw
+                diff_raw = new_stake_raw - old_stake
+                
+                # Konversi selisih ke bentuk Human Readable (misal: 1000000 uatom -> 1 ATOM)
+                diff_human = diff_raw / (10**decimals)
+
+                # Cek apakah nilai ABSOLUT (positif/negatif) perubahan >= Batas yang ditentukan (100)
+                if abs(diff_human) >= MIN_STAKE_CHANGE_AMOUNT:
+                    send_notification = True
+                    
+                    if diff_human > 0:
+                        alert_title = "💰 New Delegation Detected"
+                        embed_color = discord.Color.green()
+                        extra_description = f"\n**Amount:** +{diff_human:,.2f} {token_symbol}\n**Total Stake:** {status_info['total_stake']}"
+                    else:
+                        alert_title = "💸 Undelegation / Slash Detected"
+                        embed_color = discord.Color.dark_orange()
+                        extra_description = f"\n**Amount:** {diff_human:,.2f} {token_symbol}\n**Total Stake:** {status_info['total_stake']}"
 
         if send_notification:
             channel = self.bot.get_channel(channel_id)
-            if not channel: return
+            if channel:
+                # Pass extra_description ke fungsi create_alert_embed (perlu modifikasi dikit fungsi ini atau append manual)
+                embed = await self.create_alert_embed(alert_title, embed_color, chain_name, val_addr, status_info)
+                if extra_description:
+                    embed.description += extra_description
+                
+                try:
+                    user = await self.bot.fetch_user(user_id)
+                    await channel.send(content=user.mention, embed=embed)
+                except Exception as e:
+                    logging.error(f"Failed to send notification: {e}")
 
-            # Kita perlu 'chain_config' untuk embed baru (jika Anda tambah explorer)
-            # Jika belum, Anda bisa hapus 'chain_config' dari pemanggilan ini
-            embed = await self.create_alert_embed(alert_title, embed_color, chain_name, val_addr, status_info)
-            try:
-                user = await self.bot.fetch_user(user_id)
-                await channel.send(content=user.mention, embed=embed)
-            except Exception as e:
-                logging.error(f"Failed to send notification to channel {channel_id}: {e}")
-
-        # Simpan status baru (JAILED, WARNING_MISSED_BLOCKS, Bonded, dll)
-        db_manager.update_validator_status(chain_name, val_addr, db_status_to_save, new_missed, datetime.datetime.now().isoformat(), status_info['moniker'])
+        # Simpan status DAN stake baru ke DB
+        db_manager.update_validator_status(
+            chain_name, val_addr, db_status_to_save, 
+            new_missed, datetime.datetime.now().isoformat(), 
+            status_info['moniker'], 
+            new_stake=new_stake_raw  # Simpan stake raw ke DB
+        )
 
     async def create_alert_embed(self, title, color, chain_name, val_addr, status_info):
         embed = discord.Embed(

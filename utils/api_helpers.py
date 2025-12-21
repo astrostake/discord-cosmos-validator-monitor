@@ -65,8 +65,11 @@ async def get_validator_info(
             "BOND_STATUS_UNBONDED": "Unbonded"
         }.get(validator_details['status'], validator_details['status'])
 
-        total_stake_raw = float(validator_details.get('delegator_shares', '0'))
-        total_stake_human = f"{total_stake_raw / (10**token_decimals):,.2f} {token_symbol}"
+        raw_tokens_str = validator_details.get('tokens', validator_details.get('delegator_shares', '0'))
+        raw_tokens_float = float(raw_tokens_str)
+        
+        # Konversi ke Human Readable
+        total_stake_human = f"{raw_tokens_float / (10**token_decimals):,.2f} {token_symbol}"
 
         missed_blocks = -1
         estimated_uptime = "N/A"
@@ -93,6 +96,7 @@ async def get_validator_info(
             'jailed': jailed,
             'missed_blocks': missed_blocks,
             'total_stake': total_stake_human,
+            'raw_stake': raw_tokens_float,
             'estimated_uptime': estimated_uptime,
             'estimated_uptime_percentage': estimated_uptime_percentage
         }

@@ -20,6 +20,7 @@ def init_db():
                 missed_blocks INTEGER,
                 last_check_time TEXT,
                 notifications_enabled BOOLEAN DEFAULT 1
+                last_total_stake REAL DEFAULT 0
             );
         ''')
         cursor.execute('''
@@ -33,6 +34,14 @@ def init_db():
                 UNIQUE(channel_id, chain_name)
             );
         ''')
+
+        # MIGRATION HELPER: Cek apakah kolom last_total_stake sudah ada (untuk user lama)
+        try:
+            cursor.execute("SELECT last_total_stake FROM validators LIMIT 1")
+        except sqlite3.OperationalError:
+            # Jika error, berarti kolom belum ada. Tambahkan sekarang.
+            logging.info("Migrating DB: Adding last_total_stake column...")
+            cursor.execute("ALTER TABLE validators ADD COLUMN last_total_stake REAL DEFAULT 0")
 
 def add_validator(user_id, channel_id, chain_name, validator_address, moniker=None):
     """Adds a new validator to the database."""
@@ -90,17 +99,29 @@ def get_all_validators_to_monitor():
     """Retrieves all registered validators for monitoring."""
     with sqlite3.connect(DATABASE_NAME) as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT chain_name, validator_address, user_id, channel_id, moniker, status, missed_blocks FROM validators WHERE notifications_enabled = 1")
+        cursor.execute("SELECT chain_name, validator_address, user_id, channel_id, moniker, status, missed_blocks, last_total_stake FROM validators WHERE notifications_enabled = 1")
         return cursor.fetchall()
 
-def update_validator_status(chain_name, validator_address, new_status, new_missed_blocks, last_check_time, moniker=None):
-    """Updates the validator's status and optionally moniker in the database."""
+def update_validator_status(chain_name, validator_address, new_status, new_missed_blocks, last_check_time, moniker=None, new_stake=None):
+    """Updates the validator's status, moniker, and stake in the database."""
     with sqlite3.connect(DATABASE_NAME) as conn:
         cursor = conn.cursor()
-        if moniker:
-            cursor.execute(
+        
+        # Logika query dinamis tergantung parameter yang dikirim
+        if moniker and new_stake is not None:
+             cursor.execute(
+                "UPDATE validators SET status = ?, missed_blocks = ?, last_check_time = ?, moniker = ?, last_total_stake = ? WHERE chain_name = ? AND validator_address = ?",
+                (new_status, new_missed_blocks, last_check_time, moniker, new_stake, chain_name, validator_address)
+            )
+        elif moniker:
+             cursor.execute(
                 "UPDATE validators SET status = ?, missed_blocks = ?, last_check_time = ?, moniker = ? WHERE chain_name = ? AND validator_address = ?",
                 (new_status, new_missed_blocks, last_check_time, moniker, chain_name, validator_address)
+            )
+        elif new_stake is not None:
+            cursor.execute(
+                "UPDATE validators SET status = ?, missed_blocks = ?, last_check_time = ?, last_total_stake = ? WHERE chain_name = ? AND validator_address = ?",
+                (new_status, new_missed_blocks, last_check_time, new_stake, chain_name, validator_address)
             )
         else:
             cursor.execute(
