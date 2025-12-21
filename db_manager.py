@@ -19,7 +19,7 @@ def init_db():
                 status TEXT,
                 missed_blocks INTEGER,
                 last_check_time TEXT,
-                notifications_enabled BOOLEAN DEFAULT 1
+                notifications_enabled BOOLEAN DEFAULT 1,
                 last_total_stake REAL DEFAULT 0
             );
         ''')
