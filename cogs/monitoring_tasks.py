@@ -19,8 +19,8 @@ from utils.api_helpers import (create_progress_bar, get_latest_block_height,
 MONITOR_INTERVAL_SECONDS = 60
 GOVERNANCE_CHECK_INTERVAL_SECONDS = 300
 UPGRADE_CHECK_INTERVAL_SECONDS = 3600
-MISSED_BLOCKS_THRESHOLD = 10
-MIN_STAKE_CHANGE_AMOUNT = 100.0
+MISSED_BLOCKS_THRESHOLD = 50
+MIN_STAKE_CHANGE_AMOUNT = 1000.0
 
 class MonitoringTasks(commands.Cog):
     def __init__(self, bot: commands.Bot):
