@@ -21,7 +21,7 @@ class ValidatorCommands(commands.Cog):
     @app_commands.describe(
         chain_name="Name of the chain",
         validator_address="Validator address",
-        mention="Optional: User or Role to mention on alerts"
+        mention="Optional: Role/User to tag (Skip this to tag yourself by default)"
     )
     @app_commands.autocomplete(chain_name=chain_autocomplete)
     async def register(
