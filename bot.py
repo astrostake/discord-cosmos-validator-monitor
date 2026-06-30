@@ -1,66 +1,87 @@
 # bot.py
 # -*- coding: utf-8 -*-
+"""Main entry point for the Cosmos Validator Monitoring Discord Bot."""
 
 # --- Standard Library Imports ---
-import asyncio
+import datetime
 import logging
 import os
+import sys
+from logging.handlers import RotatingFileHandler
 
 # --- Third-Party Imports ---
 import discord
 import httpx
-import yaml
 from discord.ext import commands
 from dotenv import load_dotenv
 
 # --- Local Imports ---
 import db_manager
+from settings import load_config
 
 # --- Initial Setup ---
 load_dotenv()
 
-# Konfigurasi logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(module)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
-)
 
-# --- Fungsi untuk memuat konfigurasi ---
-def load_config(config_file='config.yaml'):
-    """Memuat konfigurasi chains dari file YAML."""
-    try:
-        with open(config_file, 'r') as f:
-            config = yaml.safe_load(f)
-            logging.info(f"Configuration loaded successfully from {config_file}.")
-            return config
-    except FileNotFoundError:
-        logging.critical(f"FATAL: Configuration file '{config_file}' not found. The bot cannot start.")
-        exit(1)
-    except yaml.YAMLError as e:
-        logging.critical(f"FATAL: Error parsing '{config_file}': {e}. The bot cannot start.")
-        exit(1)
+def setup_logging(log_level: str = "INFO", log_file: str = None):
+    """Configure logging with console output and optional rotating file handler."""
+    level = getattr(logging, log_level.upper(), logging.INFO)
 
-# --- Class Bot Utama ---
+    formatter = logging.Formatter(
+        '%(asctime)s - %(levelname)s - %(module)s - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+
+    root_logger = logging.getLogger()
+    root_logger.setLevel(level)
+
+    # Prevent duplicate handlers on reload
+    root_logger.handlers.clear()
+
+    # Console handler
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(formatter)
+    root_logger.addHandler(console_handler)
+
+    # Rotating file handler
+    if log_file:
+        file_handler = RotatingFileHandler(
+            log_file, maxBytes=5 * 1024 * 1024, backupCount=3, encoding='utf-8'
+        )
+        file_handler.setFormatter(formatter)
+        root_logger.addHandler(file_handler)
+        logging.info(f"File logging enabled: {log_file}")
+
+
+# --- Main Bot Class ---
 class CosmosMonitorBot(commands.Bot):
     """
-    Class turunan dari commands.Bot untuk merangkum fungsionalitas bot,
-    termasuk konfigurasi dan klien HTTP.
+    Extended Bot class that holds configuration, HTTP client, and
+    provides admin check utilities.
     """
-    def __init__(self, *args, **kwargs):
+
+    def __init__(self, settings, chains, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.supported_chains = load_config()
-        self.async_client = httpx.AsyncClient(timeout=20.0)
+        self.settings = settings
+        self.supported_chains = chains  # Dict[str, ChainConfig]
+        self.async_client = httpx.AsyncClient(timeout=settings.api_timeout)
+        self.start_time = datetime.datetime.now(datetime.timezone.utc)
         logging.info("CosmosMonitorBot initialized.")
 
     async def setup_hook(self):
         """
-        Hook ini dijalankan setelah login bot dan sebelum terhubung ke WebSocket.
-        Digunakan untuk memuat ekstensi (cogs).
+        Called after login but before connecting to the WebSocket.
+        Initializes the database and loads all cogs.
         """
         logging.info("Running setup_hook...")
-        
-        # Memuat semua file .py dari direktori 'cogs'
+
+        # Initialize async database
+        await db_manager.init_db()
+
+        # Restore persisted runtime settings
+        await self._restore_runtime_settings()
+
+        # Load all cogs from the cogs/ directory
         cogs_loaded = 0
         for filename in os.listdir('./cogs'):
             if filename.endswith('.py') and not filename.startswith('__'):
@@ -70,51 +91,79 @@ class CosmosMonitorBot(commands.Bot):
                     cogs_loaded += 1
                 except Exception as e:
                     logging.error(f"Failed to load cog {filename}: {type(e).__name__} - {e}")
-        
+
         logging.info(f"Completed loading {cogs_loaded} cogs.")
 
-        # Sinkronisasi slash commands secara global setelah semua cogs dimuat
+        # Sync slash commands globally
         try:
             synced = await self.tree.sync()
             logging.info(f"Successfully synced {len(synced)} application commands globally.")
         except Exception as e:
             logging.error(f"Failed to sync application commands: {e}")
 
+    async def _restore_runtime_settings(self):
+        """Restore any settings that were changed at runtime and persisted to DB."""
+        try:
+            saved_settings = await db_manager.get_all_runtime_settings()
+            restored = 0
+            for key, value in saved_settings.items():
+                if self.settings.update(key, value):
+                    restored += 1
+            if restored:
+                logging.info(f"Restored {restored} runtime settings from database.")
+        except Exception as e:
+            logging.warning(f"Could not restore runtime settings: {e}")
+
     async def on_ready(self):
-        """Event yang dijalankan saat bot siap beroperasi."""
+        """Called when the bot is fully ready."""
         logging.info(f'Logged in as {self.user.name} ({self.user.id})')
         logging.info('Bot is ready and online!')
-        await self.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name="Validator Performance"))
+        await self.change_presence(
+            activity=discord.Activity(
+                type=discord.ActivityType.watching, name="Validator Performance"
+            )
+        )
 
     async def on_close(self):
-        """Event untuk membersihkan resource saat bot ditutup."""
+        """Clean up resources on shutdown."""
         logging.info("Closing bot... Closing HTTP client session.")
         await self.async_client.aclose()
+
+    @property
+    def uptime(self) -> datetime.timedelta:
+        """Calculate bot uptime."""
+        return datetime.datetime.now(datetime.timezone.utc) - self.start_time
+
+    def is_admin(self, user_id: int) -> bool:
+        """Check if a user is a bot administrator."""
+        return user_id in self.settings.admin_user_ids
 
 
 # --- Main Execution Block ---
 if __name__ == '__main__':
     DISCORD_BOT_TOKEN = os.getenv('DISCORD_BOT_TOKEN')
     if not DISCORD_BOT_TOKEN:
-        logging.critical("DISCORD_BOT_TOKEN environment variable not set. Please create a .env file or export it.")
+        print("FATAL: DISCORD_BOT_TOKEN environment variable not set.")
+        print("Please create a .env file or export it.")
         exit(1)
 
-    # Inisialisasi database
-    try:
-        db_manager.init_db()
-        logging.info("Database initialized successfully.")
-    except Exception as e:
-        logging.critical(f"Failed to initialize database: {e}")
-        exit(1)
-        
-    # Menyiapkan intents
+    # Load configuration
+    settings, chains = load_config()
+
+    # Setup logging (must be after config load to use configured level)
+    setup_logging(settings.log_level, settings.log_file)
+
+    # Set database path
+    db_manager.set_db_path(settings.db_path)
+
+    # Setup intents
     intents = discord.Intents.default()
     intents.message_content = True
     intents.members = True
-    
-    # Membuat instance dan menjalankan bot
-    bot = CosmosMonitorBot(command_prefix='!', intents=intents)
-    
+
+    # Create and run bot
+    bot = CosmosMonitorBot(settings, chains, command_prefix='!', intents=intents)
+
     try:
         bot.run(DISCORD_BOT_TOKEN)
     except discord.errors.LoginFailure:
