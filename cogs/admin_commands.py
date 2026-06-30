@@ -23,14 +23,10 @@ def is_bot_admin():
     async def predicate(interaction: discord.Interaction) -> bool:
         bot = interaction.client
         is_admin_user = bot.is_admin(interaction.user.id)
-        has_guild_permission = (
-            interaction.user.guild_permissions.manage_guild
-            if interaction.guild else False
-        )
 
-        if not (is_admin_user or has_guild_permission):
+        if not is_admin_user:
             await interaction.response.send_message(
-                "❌ You need **Manage Server** permission or be a bot admin to use this command.",
+                "❌ You must be a registered **Bot Admin** to use this command.",
                 ephemeral=True
             )
             return False

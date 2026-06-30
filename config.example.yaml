@@ -22,7 +22,7 @@ bot:
   admin_user_ids: []  # Add Discord user IDs that can manage the bot
 
 chains:
-  empe:
+  empe-testnet:
     rest_api_url: "https://empeiria-testnet-api.itrocket.net"
     valoper_prefix: "empevaloper"
     valcons_prefix: "empevalcons"
@@ -35,7 +35,7 @@ chains:
     gov_proposals_endpoint: "/cosmos/gov/v1beta1/proposals"
     current_plan_endpoint: "/cosmos/upgrade/v1beta1/current_plan"
 
-  lumera:
+  lumera-testnet:
     rest_api_url: "https://lumera-testnet-api.polkachu.com"
     valoper_prefix: "lumeravaloper"
     valcons_prefix: "lumeravalcons"
@@ -48,7 +48,7 @@ chains:
     gov_proposals_endpoint: "/cosmos/gov/v1/proposals"
     current_plan_endpoint: "/cosmos/upgrade/v1beta1/current_plan"
 
-  safrochain:
+  safrochain-testnet:
     rest_api_url: "https://rest.testnet.safrochain.com"
     valoper_prefix: "addr_safrovaloper"
     valcons_prefix: "addr_safrovalcons"
@@ -61,7 +61,7 @@ chains:
     gov_proposals_endpoint: "/cosmos/gov/v1/proposals"
     current_plan_endpoint: "/cosmos/upgrade/v1beta1/current_plan"
 
-  republic:
+  republic-testnet:
     rest_api_url: "https://republic-testnet-api.linknode.org"
     valoper_prefix: "raivaloper"
     valcons_prefix: "raivalcons"
@@ -74,7 +74,7 @@ chains:
     gov_proposals_endpoint: "/cosmos/gov/v1/proposals"
     current_plan_endpoint: "/cosmos/upgrade/v1beta1/current_plan"
 
-  pchaind:
+  pchaind-testnet:
     rest_api_url: "https://api-t.pushchain.nodestake.org"
     valoper_prefix: "pushvaloper"
     valcons_prefix: "pushvalcons"

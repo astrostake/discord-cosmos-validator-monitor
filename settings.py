@@ -110,7 +110,7 @@ def load_config(config_file: str = 'config.yaml') -> tuple:
         with open(config_file, 'r') as f:
             raw = yaml.safe_load(f)
     except FileNotFoundError:
-        logger.critical(f"Configuration file '{config_file}' not found.")
+        logger.critical(f"Configuration file '{config_file}' not found. Please copy 'config.example.yaml' to '{config_file}' and configure it.")
         raise SystemExit(1)
     except yaml.YAMLError as e:
         logger.critical(f"Error parsing '{config_file}': {e}")

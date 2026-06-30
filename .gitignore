@@ -13,6 +13,8 @@ env/
 
 # Environment variables
 .env
+config.yaml
+config.yml
 
 # Logs
 *.log
